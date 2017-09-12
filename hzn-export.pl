@@ -2,7 +2,8 @@ use strict;
 use warnings;
 use feature qw|say state|;
 use utf8;
-use lib '../modules';
+use FindBin;
+use lib "$FindBin::Bin/../modules";
 
 package main;
 use Data::Dumper;
