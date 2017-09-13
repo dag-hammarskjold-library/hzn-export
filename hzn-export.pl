@@ -1083,7 +1083,7 @@ sub s3_data {
 	die "s3 read error $?" unless any {$? == $_} 0, 256;
 	for (split "\n", $qx) {
 		my @line = split /\s+/, $_;
-		my $path = join '', @line[3..$#line];
+		my $path = join ' ', @line[3..$#line];
 		my $bib = (split /\//, $path)[3];
 		my $lang = substr $path,-6,2;
 		$return->{$bib}->{$lang} = $path;
