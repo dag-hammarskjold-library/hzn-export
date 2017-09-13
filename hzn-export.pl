@@ -199,14 +199,14 @@ sub export_from {
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
 		my $audit = audit_data($opts->{t},$filter);
-		my $dls = dls_data($opts->{d},$filter); # updates dls data store
+		#my $dls = dls_data($opts->{d},$filter); # updates dls data store
 		#my $s3 = s3_data($opts->{d},$filter);
 		say "writing xml...";
 		$total += write_xml (
 			type => $opts->{t},
 			filter => $filter,
 			#s3_data => $s3,
-			dls_data => $dls,
+			#dls_data => $dls,
 			item => $item,
 			dups => $dups,
 			audit => $audit,
@@ -1082,8 +1082,7 @@ sub s3_data {
 	my $qx = qx|$cmd|;
 	die "s3 read error $?" unless any {$? == $_} 0, 256;
 	for (split "\n", $qx) {
-		my @line = split /\s+/, $_;
-		my $path = join ' ', @line[3..$#line];
+		my $path = substr $_, 31;
 		my $bib = (split /\//, $path)[3];
 		my $lang = substr $path,-6,2;
 		$return->{$bib}->{$lang} = $path;
