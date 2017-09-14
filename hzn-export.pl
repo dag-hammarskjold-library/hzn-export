@@ -138,7 +138,8 @@ sub options {
 		['o:' => 'xml output directory'],
 		['d:' => 'data store dir'],
 		['m:' => 'modified since'],
-		['u:' => 'modified until']
+		['u:' => 'modified until'],
+		['s:' => 'sql criteria']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -147,8 +148,8 @@ sub options {
 	} else {
 		$opts{a} && $opts{b} && die q{must choose only one of opts "a" or "b"}."\n";
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
-		$opts{m} || die q{opt "m" (date) required}."\n";
-		length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
+		$opts{m} || $opts{s} || die q{opt "m" (date) or "s" (sql) required}."\n";
+		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
 		$opts{d} || die q{opt "d" (database dir) required}."\n";
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
@@ -172,15 +173,23 @@ sub MAIN {
 	update_hzn_data($opts->{d}); # data used to find duplicate 035 ctrl#s
 	
 	for my $opt (qw/s m c q x/) {
-		next unless $opts->{$opt};
-		$dispatch{$opt}->($opts);
+		#next unless $opts->{$opt};
+		#$dispatch{$opt}->($opts);
 	}
+	
+	run_export($opts);
 }
 
-sub export_from {
+sub run_export {
 	my $opts = shift;
 	
-	my $ids = modified_since(@{$opts}{qw/t m u/});
+	my $ids;
+	if ($opts->{m}) {
+		$ids = modified_since(@{$opts}{qw/t m u/});
+	} elsif ($opts->{s}) {
+		$ids = get_by_sql($opts->{s});
+	}
+	
 	my $c = scalar @$ids;
 	if ($c) {
 		say "*** ok. found $c export candidates ***";	
@@ -189,12 +198,13 @@ sub export_from {
 	}
 	
 	my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls($opts->{d}) : undef; # updates hzn ctrl data store
-	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,1);
+	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,0);
 	
 	my $fh = init_xml($opts);
 	for my $chunk (0..$chunks) {
-		my $to = $from + 999;
+		my $to = $from + 1000;
 		my $filter = join ',', grep {defined($_)} @$ids[$from..$to];
+		say $ids->[0];
 		last unless $filter;
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
@@ -224,8 +234,13 @@ sub init_xml {
 	my $opts = shift;
 	my $dir = $opts->{o} or return;
 	(-e $dir || mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
-	my $fn = "$dir/$opts->{t}\_from_$opts->{m}";
-	$fn .= "_until_$opts->{u}" if $opts->{u};
+	my $fn;
+	if ($opts->{m}) {
+		$fn = "$dir/$opts->{t}\_from_$opts->{m}";
+		$fn .= "_until_$opts->{u}" if $opts->{u};
+	} elsif ($opts->{s}) {
+		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr);
+	}
 	$fn .= '.xml';
 	open my $fh, ">:utf8", $fn; 
 	say {$fh} join "\n", HEADER, '<collection>';
@@ -489,8 +504,6 @@ sub _856 {
 			$url =~ s/$oldfn/$newfn/;
 			
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
-			#$FFT->set_sub('d',$hzn_856->get_sub('3'));
-			#$FFT->set_sub('n',uri_escape($hzn_856->get_sub('q')));
 			$FFT->set_sub('d',join ' - ', $hzn_856->get_sub('q'), $hzn_856->get_sub('3'));
 			$FFT->set_sub('n',(split '/', $url)[-1]);
 			$record->add_field($FFT);
@@ -1088,6 +1101,12 @@ sub s3_data {
 		$return->{$bib}->{$lang} = $path;
 	}
 	return $return;
+}
+
+sub get_by_sql {
+	my $sql = shift;
+	my @ids = map {$_->[0]} Get::Hzn->new(sql => $sql)->execute;
+	return \@ids;
 }
 
 __END__
