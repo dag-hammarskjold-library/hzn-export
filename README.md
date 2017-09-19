@@ -17,8 +17,8 @@ Then performs the following operations on each record:
 3. 005: delete this field as per vendor
 4. 007: create this field using defined rules
 5. 020: delete subfield c
-6. 035: create and the Hzn id#; add prefix to specify source of ID; check if any exisdting 035 values are duplicated and correct; place old value in subfield z
-7. 150: for auth records, change 150 to 151 and 550 to 551 for geogprhic terms
+6. 035: create and add the Hzn id#; add prefix to specify source of ID; check if any existing 035 values are duplicated and correct; place old value in subfield z
+7. 150: for auth records, change 150 to 151 and 550 to 551 for geogpraphic terms
 8. 4xx: for auth records, delete the xrefs for 4xx fields (alt labels no longer treated as linked data fields). 
 9. 650: change tag to 651 for geo terms
 10. 856: create FFT fields pointing to s3 file store if DHL owns file; delete 856 fields for which was created
