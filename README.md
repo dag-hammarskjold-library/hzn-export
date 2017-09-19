@@ -5,12 +5,14 @@ This script exports MARC records from Horizon using a date range or sql criteria
 
 options (all datetimes expected in iso 8601 format (YYYYMMDDHHMMSS)):
 
-> -m: modified since. export records modified since this time
-> -u: modified until. don't export records modified after this time
-> -s: sql query: export records with bib/auth#s returned by this query
-> -o: direcorty to write output file to
+* -m: modified since. export records modified since this time
+* -u: modified until. don't export records modified after this time
+* -s: sql query: export records with bib/auth#s returned by this query
+* -o: direcorty to write output file to
 
-It loads a bunch of data it needs to add to records:
+What it does:
+
+Loads a bunch of data it needs to add to records:
 1. s3 data for creating FFT fields
 2. audit data from the Hzn database
 3. item data from the Hzn database 
