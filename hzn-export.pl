@@ -9,7 +9,7 @@ package main;
 use Data::Dumper;
 $Data::Dumper::Indent = 1;
 use Getopt::Std;
-use List::Util qw|pairs any max|;
+use List::Util qw|pairs any all none min max|;
 use URI::Escape;
 use Carp;
 use Storable;
@@ -1093,7 +1093,14 @@ sub s3_data {
 	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/docs_new/$range/ --recursive|;
 	#say qq|running "$cmd"...|;
 	my $qx = qx|$cmd|;
-	die "s3 read error $?" unless any {$? == $_} 0, 256;
+	#die "s3 read error $?" unless any {$? == $_} 0, 256;
+	while (none {$? == $_} 0, 256) {
+		state $retry = 1;
+		die "retries failed" if $retry == 5;
+		"say. s3 read error. retrying. $?";
+		$qx = qx|$cmd|;
+		$retry++;
+	}
 	for (split "\n", $qx) {
 		my $path = substr $_, 31;
 		my $bib = (split /\//, $path)[3];
