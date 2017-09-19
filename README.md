@@ -20,7 +20,7 @@ Loads a bunch of data it needs to add to records:
 3. item data from the Hzn database 
 
 Then filters out non-exportable records:
-1. does not contain 191 or 791 field or contain "DHU" in 039$b
+1. does not contain 191 or 791 field or exact match "DHU" in 039$b
 
 Then performs the following operations on each record:
 1. xrefs: for authroty-controlled fields, puts the auth# of the linked auth record (the xref) in subfield 0
