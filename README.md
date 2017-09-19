@@ -8,7 +8,7 @@ options (all datetimes expected in iso 8601 format (YYYYMMDDHHMMSS)):
 * -m: modified since. export records modified since this time
 * -u: modified until. don't export records modified after this time
 * -s: sql query: export records with bib/auth#s returned by this query
-* -o: direcorty to write output file to
+* -o: directory to write output file to
 
 What it does:
 
