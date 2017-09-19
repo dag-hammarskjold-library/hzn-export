@@ -5,6 +5,8 @@ This script exports MARC records from Horizon using a date range or sql criteria
 
 options (all datetimes expected in iso 8601 format (YYYYMMDDHHMMSS)):
 
+* -b: boolean switch to export bib records
+* -a: boolean switch to export auth records
 * -m: modified since. export records modified since this time
 * -u: modified until. don't export records modified after this time
 * -s: sql query: export records with bib/auth#s returned by this query
