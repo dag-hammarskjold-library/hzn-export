@@ -1097,7 +1097,7 @@ sub s3_data {
 	while (none {$? == $_} 0, 256) {
 		state $retry = 1;
 		die "retries failed" if $retry == 5;
-		"say. s3 read error. retrying. $?";
+		say "s3 read error. retrying. $?";
 		$qx = qx|$cmd|;
 		$retry++;
 	}
