@@ -139,7 +139,8 @@ sub options {
 		['d:' => 'data store dir'],
 		['m:' => 'modified since'],
 		['u:' => 'modified until'],
-		['s:' => 'sql criteria']
+		['s:' => 'sql criteria'],
+		['S:' => 'sql script']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -188,6 +189,8 @@ sub run_export {
 		$ids = modified_since(@{$opts}{qw/t m u/});
 	} elsif ($opts->{s}) {
 		$ids = get_by_sql($opts->{s});
+	} elsif ($opts->{S}) {
+		$ids = get_by_sql_script($opts->{s});
 	}
 	
 	my $c = scalar @$ids;
@@ -485,7 +488,7 @@ sub _856 {
 			$newfn = (split /;/, $newfn)[0];
 			$newfn =~ s/\.pdf//;
 			$newfn =~ s/\s//;
-			$newfn =~ tr/./-/;
+			$newfn =~ tr/.[]/-^^/;
 			if (! grep {$_ eq substr($newfn,-2)} keys %{&LANG_ISO_STR}) {
 				$newfn .= '-'.LANG_STR_ISO->{$lang};
 			}
@@ -1113,6 +1116,12 @@ sub s3_data {
 sub get_by_sql {
 	my $sql = shift;
 	my @ids = map {$_->[0]} Get::Hzn->new(sql => $sql)->execute;
+	return \@ids;
+}
+
+sub get_by_sql_script {
+	my $script = shift;
+	my @ids = map {$_->[0]} Get::Hzn->new(script => $script)->execute;
 	return \@ids;
 }
 
