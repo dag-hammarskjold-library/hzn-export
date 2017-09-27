@@ -140,7 +140,8 @@ sub options {
 		['m:' => 'modified since'],
 		['u:' => 'modified until'],
 		['s:' => 'sql criteria'],
-		['S:' => 'sql script']
+		['S:' => 'sql script'],
+		['3:' => 's3 database']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -218,7 +219,7 @@ sub run_export {
 		$total += write_xml (
 			type => $opts->{t},
 			filter => $filter,
-			#s3_data => $s3,
+			s3_dbh => DBI->connect('dbi:SQLite:dbname='.$opts->{3},'',''),
 			#dls_data => $dls,
 			item => $item,
 			dups => $dups,
@@ -259,12 +260,12 @@ sub write_xml {
 		encoding => 'utf8',
 		callback => sub {
 			my $record = shift;
-			my $range = range($record->id,1000);
-			if ($range_control ne $range) {
-				say "range was: $range_control; is: $range. getting new s3 data chunk...";
-				$p{s3_data} = s3_data($range);
-				$range_control = $range;
-			}
+			#my $range = range($record->id,1000);
+			#if ($range_control ne $range) {
+			#	say "range was: $range_control; is: $range. getting new s3 data chunk...";
+			#	$p{s3_data} = s3_data($range);
+			#	$range_control = $range;
+			#}
 			_000($record);
 			_005($record);
 			_035($record,$p{type},$p{dups});
@@ -277,7 +278,7 @@ sub write_xml {
 				_007($record);
 				_020($record);
 				_650($record);
-				_856($record,$p{s3_data},$p{dls_data}); # also handles FFT
+				_856($record,$p{s3_dbh},undef); # also handles FFT
 				_949($record,$p{item}->{$record->id});
 				_993($record);
 				_967($record);
@@ -479,18 +480,22 @@ sub _856 {
 			
 			S3:
 			
-			my $key = $s3->{$record->id}->{LANG_STR_ISO->{$lang}};
-			if (! $key) {
-				$s3->{$record->id}->{$lang} = 'MISSING';
-				return;
-			}
+			#my $key = $s3->{$record->id}->{LANG_STR_ISO->{$lang}};
+			my $bib = $record->id;
+			my $iso = LANG_STR_ISO->{$lang};
+			my $sql = qq|select key from keys where bib = $bib and lang = "$iso"|;
+			#say $sql;
+			my $res = $s3->selectrow_arrayref($sql);
+			my $key = $res->[0] if $res;
+			next unless $key;
+			
 			my $newfn = (split /\//,$key)[-1];
 			$newfn = (split /;/, $newfn)[0];
 			$newfn =~ s/\.pdf//;
 			$newfn =~ s/\s//;
 			$newfn =~ tr/.[]/-^^/;
 			if (! grep {$_ eq substr($newfn,-2)} keys %{&LANG_ISO_STR}) {
-				$newfn .= '-'.LANG_STR_ISO->{$lang};
+				$newfn .= '-'.$iso;
 			}
 			$newfn .= '.pdf';
 			
