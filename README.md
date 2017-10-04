@@ -67,13 +67,13 @@ Then performs the following operations on each record:
     * add 989__ $aDocuments and Publications	$bResolutions and Decisions	$cPresidential Statements
   * 14.8 if 089__b:"B01" NOT 989__b:"Resolutions and Decisions"
     * add 989__ $aDocuments and Publications	$b Resolutions and Decisions
-  * 14.9  if 089__b:"B15" AND 089__b:"B16"  NOT 245:"*letter*from the Secretary-General*"
+  * 14.9  if 089__b:"B15" AND 089__b:"B16"  NOT 245:"\*letter\*from the Secretary-General\*"
     * add 989__ $aDocuments and Publications	$bReports	$cSecretary-General's Reports 
   * 14.10 if 089__b:"B04"
     * add 989__ $aDocuments and Publications	$bReports	$cAnnual and Sessional Reports 
   * 14.11 if 089__b:"B14" NOT 089__b:"B04"
     * add 989__ $aDocuments and Publications	$bReports	$cPeriodic Reports 
-  * 14.12 if 089__b:"B16" AND title:"*Report*" NOT 989__b:"Reports"
+  * 14.12 if 089__b:"B16" AND title:"\*Report\*" NOT 989__b:"Reports"
     * add 989__ $aDocuments and Publications	$bReports
   * 14.13 if 191__a:"\*/PV.\*"
     * add 989__ $aDocuments and Publications	$bMeeting Records	$cVerbatim Records
