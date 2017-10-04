@@ -113,7 +113,7 @@ Then performs the following operations on each record:
   * 15.2 if the record has a 993, search for the following patterns (& + Add.\[0-9\]+, corr.\[0-9], Rev.\[0-9])
     * remove the & and create a new 993, with the same indicator and add, corr, rev patterns at the end of the root symbol. 
     * For instance, a 9933 $a A/62/318 & Add.1 in Horizon shoud be split in two 9933, one with the root symbol only A/62/318, one with the addendum A/62/318/Add.1
-  * 15.3 If there is a 996 in a bib record, and if 191 or 791 $b are A/, S/ A/HRC, get the body and the session in 191/791 $b and $c, search for the meeting number pattern, create a 
+  * 15.3 If there is a 996 in a bib record, and if 191 or 791 $b are A/, S/ A/HRC, get the body and the session in 191/791 $b and $c, search for the meeting number pattern in 996, reconstruct the symbol to store it in a new 993. 
     * if it is a GA emergency special session (A/ES-#), and if the session is greater than 7 the symbol is reconstructed as follow A/ES-\[session]/PV.\[meeting number]. Otherwise it is reconstructed as follow A/PV.\[meeting number]
     * if it is a GA special session (A/S-#), and if the session is greater than 5 the symbol is reconstructed as follow A/S-\[session]/PV.\[meeting number]. Otherwise it is reconstructed as follow A/PV.\[meeting number]
     * if this is a GA regular session A/ and the session is greater than 30, the reconstructed symbol is A/\[session]/.PV.\[meeting number]. Otherwise, it is A/PV.\[meeting number]
