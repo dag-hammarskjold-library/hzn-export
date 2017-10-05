@@ -152,7 +152,7 @@ sub options {
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
 		$opts{m} || $opts{s} || die q{opt "m" (date) or "s" (sql) required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
-		$opts{d} || die q{opt "d" (database dir) required}."\n";
+		#$opts{d} || die q{opt "d" (database dir) required}."\n";
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
 		$opts{o} ||= '.';
@@ -172,12 +172,7 @@ sub MAIN {
 	);
 
 	#update_dls_data($opts->{d}); # only used to recreate dls 856 fields. use FFT only for now
-	update_hzn_data($opts->{d}); # data used to find duplicate 035 ctrl#s
-	
-	for my $opt (qw/s m c q x/) {
-		#next unless $opts->{$opt};
-		#$dispatch{$opt}->($opts);
-	}
+	#update_hzn_data($opts->{d}); # data used to find duplicate 035 ctrl#s
 	
 	run_export($opts);
 }
@@ -201,14 +196,13 @@ sub run_export {
 		say "no export candidates found" and return;
 	}
 	
-	my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls($opts->{d}) : undef; # updates hzn ctrl data store
+	my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls() : undef; # ($opts->{d}) : undef; # updates hzn ctrl data store
 	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,0);
 	
 	my $fh = init_xml($opts);
 	for my $chunk (0..$chunks) {
 		my $to = $from + 1000;
 		my $filter = join ',', grep {defined($_)} @$ids[$from..$to];
-		say $ids->[0];
 		last unless $filter;
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
@@ -856,31 +850,6 @@ sub _998 {
 	$record->add_field($_998);
 }
 
-sub dls_data {
-	my ($datadir,$filter) = @_;
-	my $dfile = "$datadir/dls";
-	
-	say 'loading dls data...';
-	#open my $fh,'<',$dfile;
-	#flock $fh, 2;
-	my $locktime = time;
-	my $data = retrieve $dfile;
-	my %return;
-	$return{$_} = $data->{$_} for split ',', $filter;
-	
-	return \%return;
-}
-
-sub s3_data_0 {
-	my ($datadir,$filter) = @_;
-	
-	say 'loading s3 data...';
-	my $data = retrieve $datadir.'/s3';
-	my %return;
-	$return{$_} = $data->{$_} for split ',', $filter;;
-	return \%return;	
-}
-
 sub item_data {
 	my ($filter) = @_;
 	my %data;
@@ -946,22 +915,24 @@ sub audit_data {
 }
 
 sub duplicate_ctrls {
-	my $datadir = shift;
-	my $dfile = "$datadir/ctrl";
 	
-	say 'loading hzn ctrl data...';
-	#open my $fh,'<',$dfile;
-	#flock $fh, 2;
-	my $locktime = time;
-	my $data = retrieve $dfile;
+	say "indexing hzn 035...";
+	my $get = Get::Hzn->new(sql => q|select text from z035|);
+	my %seen;
+	$get->execute (
+		callback => sub {
+			my $row = shift;
+			for ($get->get_sub($row->[0],'a')) {
+				$seen{$_}++;
+			}
+		}
+	);
 	
-	say 'finding duplicates...';
 	my %return;
-	delete $data->{updated};
-	for my $ctrl (keys %$data) {
-		$return{$ctrl} = 1 if scalar(keys %{$data->{$ctrl}}) > 1;
+	while (my ($key,$val) = each %seen) {
+		$return{$key}++ if $val > 1;
 	}
-	
+
 	return \%return;
 }
 
@@ -1002,60 +973,6 @@ sub update_hzn_data {
 	}
 	
 	push @{$updated->{ctrl}}, $locktime;
-	store $updated, $ufile;
-}
-
-sub update_dls_data {
-	my ($datadir) = @_;
-	my ($dfile,$ufile,$mfile) = ("$datadir/dls","$datadir/updated","$datadir/map");
-	
-	say 'updating dls data...';
-	#open my $fh,'<',$dfile;
-	#flock $fh, 2;
-	
-	my $updated = retrieve $ufile;
-	my $last = max(@{$updated->{dls}});
-	
-	my $locktime = time;
-	my $qstr = _dls_query_str($last);
-	
-	my (%map,%files);
-	my $dls = Get::DLS->new;
-	$dls->iterate (
-		query => $qstr,
-		callback => sub {
-			my $record = shift;
-			my $dls_id = $record->get_values('001');
-		
-			for my $val ($record->get_values('035','a')) {
-				$map{$val} = $dls_id if substr $val,0,4 eq '(DHL)';
-			}
-			
-			for my $field ($record->get_fields('856')) {
-				next unless $field->get_sub('u') =~ m|files/[A-Z]+_|;
-				my ($lang,$url,$size) = map {$field->get_values($_)} qw/y u s/;
-				say join "\t", $lang if ! LANG_STR_ISO->{$lang};
-				$files{$dls_id}{LANG_STR_ISO->{$lang}} = [$size,$url];
-			}
-		}
-	);
-	if (%map) {
-		my $data = retrieve $mfile;
-		for (keys %map) {
-			$data->{$_} = $map{$_};
-		}
-		store $data, $mfile;
-	}
-	if (%files) {
-		my $data = retrieve $dfile;
-		for (keys %files) {
-			$data->{$_}  = $files{$_};
-		}
-		store $data, $dfile;
-	}
-
-	
-	push @{$updated->{dls}}, $locktime;
 	store $updated, $ufile;
 }
 
