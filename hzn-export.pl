@@ -12,7 +12,6 @@ use Getopt::Std;
 use List::Util qw|pairs any all none min max|;
 use URI::Escape;
 use Carp;
-use Storable;
 use DBI;
 use Get::Hzn;
 use Get::DLS;
@@ -141,7 +140,8 @@ sub options {
 		['u:' => 'modified until'],
 		['s:' => 'sql criteria'],
 		['S:' => 'sql script'],
-		['3:' => 's3 database']
+		['3:' => 's3 database'],
+		['e:' => 'error report']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -150,7 +150,7 @@ sub options {
 	} else {
 		$opts{a} && $opts{b} && die q{must choose only one of opts "a" or "b"}."\n";
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
-		$opts{m} || $opts{s} || die q{opt "m" (date) or "s" (sql) required}."\n";
+		$opts{m} || $opts{s} || $opts{e} || die q{opt "m" (date) or "s" (sql) required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
 		#$opts{d} || die q{opt "d" (database dir) required}."\n";
 		$opts{a} && ($opts{t} = 'auth');
@@ -187,6 +187,11 @@ sub run_export {
 		$ids = get_by_sql($opts->{s});
 	} elsif ($opts->{S}) {
 		$ids = get_by_sql_script($opts->{s});
+	} elsif ($opts->{e}) {
+		use File::Slurp;
+		my $errors = read_file($opts->{e});
+		my @ids = $errors =~ />\(DHL\)([^<]+)/g;
+		$ids = \@ids;
 	}
 	
 	my $c = scalar @$ids;
@@ -234,10 +239,16 @@ sub init_xml {
 	(-e $dir || mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
 	my $fn;
 	if ($opts->{m}) {
-		$fn = "$dir/$opts->{t}\_from_$opts->{m}";
-		$fn .= "_until_$opts->{u}" if $opts->{u};
+		$fn = "$dir/$opts->{t}\_from_$opts->{m}\-";
+		if ($opts->{u}) {
+			$fn .= $opts->{u};
+		} else {
+			$fn .= EXPORT_ID;
+		}
 	} elsif ($opts->{s}) {
 		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr);
+	} elsif ($opts->{e}) {
+		$fn = "$dir/".$opts->{e};
 	}
 	$fn .= '.xml';
 	open my $fh, ">:utf8", $fn; 
@@ -254,12 +265,6 @@ sub write_xml {
 		encoding => 'utf8',
 		callback => sub {
 			my $record = shift;
-			#my $range = range($record->id,1000);
-			#if ($range_control ne $range) {
-			#	say "range was: $range_control; is: $range. getting new s3 data chunk...";
-			#	$p{s3_data} = s3_data($range);
-			#	$range_control = $range;
-			#}
 			_000($record);
 			_005($record);
 			_035($record,$p{type},$p{dups});
@@ -484,14 +489,10 @@ sub _856 {
 			next unless $key;
 			
 			my $newfn = (split /\//,$key)[-1];
-			$newfn = (split /;/, $newfn)[0];
-			$newfn =~ s/\.pdf//;
-			$newfn =~ s/\s//;
-			$newfn =~ tr/.[]/-^^/;
-			if (! grep {$_ eq substr($newfn,-2)} keys %{&LANG_ISO_STR}) {
-				$newfn .= '-'.$iso;
+			$newfn = clean_fn($newfn);
+			if (! grep {$_ eq substr($newfn,-6,2)} keys %{&LANG_ISO_STR}) {
+				substr($newfn,-7,2) = '-'.$iso;
 			}
-			$newfn .= '.pdf';
 			
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
 			$FFT->set_sub('d',$hzn_856->get_sub('3'));
@@ -501,18 +502,35 @@ sub _856 {
 		} elsif (index($url,'s3.amazonaws') > -1) {
 			
 			$record->delete_field($hzn_856);
-			my $oldfn = (split /\//,$url)[-1];
-			my $newfn = uri_escape($oldfn);
-			$url =~ s/$oldfn/$newfn/;
+			my $newfn = (split /\//,$url)[-1];
+			$newfn = clean_fn($newfn);
 			
+			if ($url =~ m|(https?://[^/]+/)(.*)|) {
+				$url = $1.uri_escape($2);
+			} else {
+				die 's3 url error';
+			}
+		
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
 			$FFT->set_sub('d',join ' - ', $hzn_856->get_sub('q'), $hzn_856->get_sub('3'));
-			$FFT->set_sub('n',(split '/', $url)[-1]);
+			$FFT->set_sub('n',$newfn);
 			$record->add_field($FFT);
 		} else {
 			
 		}
 	}
+}
+
+sub clean_fn {
+	# scrub illegal characters for saving on Invenio's filesystem
+	my $fn = shift;
+	my @s = split '\.', $fn;
+	$fn = join '-', @s[0..$#s-1];
+	my $ext = $s[-1];
+	$fn =~ s/\s//g;
+	$fn =~ tr/[];/^^&/;
+	$fn .= ".$ext";
+	return $fn;
 }
 
 sub _949 {
@@ -934,46 +952,6 @@ sub duplicate_ctrls {
 	}
 
 	return \%return;
-}
-
-sub update_hzn_data {
-	my $datadir = shift;
-	my ($dfile,$ufile) = ("$datadir/ctrl","$datadir/updated");
-	
-	#say 'updating hzn ctrl data...';
-	#open my $fh,'<',$dfile;
-	#flock $fh, 2;
-	
-	my $updated = retrieve $ufile;
-	my $last = max(@{$updated->{ctrl}});
-	$last ||= $updated->{init};
-	my $locktime = time;
-	
-	say 'updating hzn ctrl data...';
-	my $bibs = modified_since('bib',date_unix_8601($last));
-	my $bibstr = join ',', @$bibs;
-	$bibstr ||= 0;
-	my %newdata;
-	my $get = Get::Hzn->new;
-	my $sql = qq|select bib#, text from bib where tag = "035" and bib# in ($bibstr)|;
-	$get->sql($sql)->execute (
-		callback => sub {
-			my $row = shift;
-			my $bib = $row->[0];
-			my $text = $row->[1];
-			$newdata{$_}{$bib} = 1 for $get->get_sub($text,'a');
-		}
-	);
-	if (%newdata) {
-		my $data = retrieve $dfile;
-		for (keys %newdata) {
-			$data->{$_} = $newdata{$_};
-		}
-		store $data, $dfile;
-	}
-	
-	push @{$updated->{ctrl}}, $locktime;
-	store $updated, $ufile;
 }
 
 sub _dls_query_str {
