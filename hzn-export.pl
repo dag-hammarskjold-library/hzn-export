@@ -12,6 +12,7 @@ use Getopt::Std;
 use List::Util qw|pairs any all none min max|;
 use URI::Escape;
 use Carp;
+use Cwd qw/abs_path/;
 use DBI;
 use Get::Hzn;
 use Get::DLS;
@@ -224,13 +225,14 @@ sub run_export {
 			dups => $dups,
 			audit => $audit,
 			output_fh => $fh,
-			candidates => $c,
+			candidates => scalar (split ',', $filter),
 		);
 		$from += 1000;
 	}
 	cut_xml($fh);
-	
-	say 'done. wrote '.$total.' records in '.(time - $stime).' seconds'; 
+
+	say "done. wrote $total records out of $c candidates in ".(time - $stime).' seconds';
+	say "output file: ".abs_path($opts->{outfile}) =~ s|/|\\|gr;
 }
 
 sub init_xml {
@@ -251,6 +253,7 @@ sub init_xml {
 		$fn = "$dir/".$opts->{e};
 	}
 	$fn .= '.xml';
+	$opts->{outfile} = $fn;
 	open my $fh, ">:utf8", $fn; 
 	say {$fh} join "\n", HEADER, '<collection>';
 	return $fh;
