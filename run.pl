@@ -153,10 +153,10 @@ sub options {
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
 		$opts{m} || $opts{s} || $opts{e} || die q{opt "m" (date) or "s" (sql) required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
-		#$opts{d} || die q{opt "d" (database dir) required}."\n";
+		$opts{3} || die q{opt "3" (s3 database path) required}."\n";
+		-e $opts{3} || die qq{s3 database path is invalid}; 
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
-		$opts{o} ||= '.';
 	}
 	return \%opts;
 }
@@ -231,16 +231,22 @@ sub run_export {
 	}
 	cut_xml($fh);
 
-	say "done. wrote $total records out of $c candidates in ".(time - $stime).' seconds';
-	say "output file: ".abs_path($opts->{outfile}) =~ s|/|\\|gr;
+	say "> done. wrote $total records out of $c candidates in ".(time - $stime).' seconds';
+	my $outfile = abs_path($opts->{outfile}) =~ s|/|\\|gr;
+	say "> output file: $outfile";
 	
 	open my $log,'>>','log';
-	say {$log} EXPORT_ID;
+	say {$log} join "\t", EXPORT_ID, $outfile;
+	
+	system qq{echo $outfile | clip};
+	say '> the output file path is in your clipboard';
+	system qq{start https://digitallibrary.un.org/batchuploader/metadata?ln=en};
 }
 
 sub init_xml {
 	my $opts = shift;
-	$opts->{o} ||= '../XML';
+	$opts->{o} ||= "$FindBin::Bin/../XML";
+	my $dir = $opts->{o};
 	(-e $dir || mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
 	my $fn;
 	if ($opts->{m}) {
@@ -979,7 +985,8 @@ sub duplicate_ctrls {
 	while (my ($key,$val) = each %seen) {
 		$return{$key}++ if $val > 1;
 	}
-
+	die "\tfailed\n" unless scalar keys %return;
+	
 	return \%return;
 }
 
