@@ -233,11 +233,14 @@ sub run_export {
 
 	say "done. wrote $total records out of $c candidates in ".(time - $stime).' seconds';
 	say "output file: ".abs_path($opts->{outfile}) =~ s|/|\\|gr;
+	
+	open my $log,'>>','log';
+	say {$log} EXPORT_ID;
 }
 
 sub init_xml {
 	my $opts = shift;
-	my $dir = $opts->{o} or return;
+	$opts->{o} ||= '../XML';
 	(-e $dir || mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
 	my $fn;
 	if ($opts->{m}) {
