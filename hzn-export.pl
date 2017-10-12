@@ -457,30 +457,28 @@ sub _650 {
 
 sub _856 {
 	my ($record,$s3,$dls) = @_;
+	
+	my $bib = $record->id;
+	
+	my $thumb_url;
+	THUMB: for my $f ($record->get_fields('856')) {
+		if ($f->check('3',qr/Thumbnail/)) {
+			$thumb_url = $f->get_sub('u');
+		}
+	}
+	
 	FIELDS: for my $hzn_856 ($record->fields('856')) {
 		my $url = $hzn_856->get_sub('u');
+		my $lang = $hzn_856->get_sub('3');
 		if (index($url,'http://daccess-ods.un.org') > -1) {
 			
 			$record->delete_field($hzn_856);
-			my $lang = $hzn_856->get_sub('3');
+			
 			die "could not detect language for file in bib# ".$record->id if (! $lang);	
-			
-			goto S3; # don't replicate 856 for now
-			if (my $data = $dls->{$record->id}->{LANG_STR_ISO->{$lang}}) {
-	
-				my ($url,$size) = @$data;
-				my $dls_856 = MARC::Field->new(tag => '856');
-				$dls_856->set_sub('u',$url);
-				$dls_856->set_sub('s',$size);
-				$dls_856->set_sub('y',$lang);
-				$record->add_field($dls_856);
-				next FIELDS;
-			}
-			
+					
 			S3:
-			
 			#my $key = $s3->{$record->id}->{LANG_STR_ISO->{$lang}};
-			my $bib = $record->id;
+			
 			my $iso = LANG_STR_ISO->{$lang};
 			my $sql = qq|select key from keys where bib = $bib and lang = "$iso"|;
 			#say $sql;
@@ -495,30 +493,55 @@ sub _856 {
 			}
 			
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
-			$FFT->set_sub('d',$hzn_856->get_sub('3'));
 			$FFT->set_sub('n',$newfn);
+			$FFT->set_sub('d',$lang);
 			$record->add_field($FFT);
 			
-		} elsif (index($url,'s3.amazonaws') > -1) {
+		} elsif (grep {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
+			
+			next if $hzn_856->check('3',qr/Thumbnail/);
 			
 			$record->delete_field($hzn_856);
 			my $newfn = (split /\//,$url)[-1];
 			$newfn = clean_fn($newfn);
 			
-			if ($url =~ m|(https?://[^/]+/)(.*)|) {
+			if ($url =~ m|(https?://.*/)(.*)|) {
 				$url = $1.uri_escape($2);
 			} else {
 				die 's3 url error';
 			}
 		
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
-			$FFT->set_sub('d',join ' - ', $hzn_856->get_sub('q'), $hzn_856->get_sub('3'));
 			$FFT->set_sub('n',$newfn);
+			$FFT->set_sub('d',$lang);
+			#$FFT->set_sub('f',$hzn_856->get_sub('q'));
+			$FFT->set_sub('x',$thumb_url) if $thumb_url;
 			$record->add_field($FFT);
 		} else {
 			
 		}
 	}
+	
+	EXTRAS: {
+		# in process
+		last;
+		my $sql = qq|select key from other where bib = $bib|;
+		my $extras = $s3->selectall_arrayref($sql);
+		for my $key (@$extras) {
+			my $newfn = (split /\//,$key)[-1];
+			my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
+			my @langs;
+			while ($isos) {
+				my $iso = substr $isos,0,2,'';
+				push @langs, LANG_ISO_STR->{$iso};
+			}
+			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
+			$FFT->set_sub('n',clean_fn($newfn));
+			$FFT->set_sub('d',join(',',@langs));
+			$record->add_field($FFT);
+		}
+	}
+	
 }
 
 sub clean_fn {
