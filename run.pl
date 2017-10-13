@@ -202,7 +202,8 @@ sub run_export {
 		say "no export candidates found" and return;
 	}
 	
-	my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls() : undef; # ($opts->{d}) : undef; # updates hzn ctrl data store
+	#my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls() : undef; # ($opts->{d}) : undef; # updates hzn ctrl data store
+	my $dups = {};
 	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,0);
 	
 	my $fh = init_xml($opts);
@@ -421,13 +422,15 @@ sub _035 {
 	
 	for my $field ($record->get_fields('035')) {
 		my $ctr = $field->get_sub('a');
-		next unless $dups->{$ctr};
+		#next unless $dups->{$ctr} > 0;
 		my $pre = substr $ctr,0,1;
 		my $new = $record->id.'X';
 		$new = $pre.$new if $pre =~ /[A-Z]/;
 		$field->set_sub('a',$new,replace => 1);
 		$field->set_sub('z',$ctr);
 	}
+	
+	#$record->delete_field
 	
 	my $pre = $type eq 'bib' ? '(DHL)' : '(DHLAUTH)';
 	my $nf = MARC::Field->new(tag => '035');
