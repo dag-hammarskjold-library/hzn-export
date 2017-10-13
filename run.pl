@@ -226,7 +226,7 @@ sub run_export {
 			dups => $dups,
 			audit => $audit,
 			output_fh => $fh,
-			candidates => scalar (split ',', $filter),
+			candidates => scalar (split ',', $filter) - 1,
 		);
 		$from += 1000;
 	}
