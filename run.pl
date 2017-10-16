@@ -36,8 +36,7 @@ use constant HEADER => <<'#';
 ]>
 #
 # <collection xmlns="http://www.loc.gov/MARC21/slim">
-# Tind doesn't like the xmlns attribute, 
-# which is ok since their marcxml doesn't conform to to it anyway  
+# Tind doesn't like the xmlns attribute
 
 use constant TYPE => {
 	map => 'Maps',
@@ -183,6 +182,8 @@ sub run_export {
 	
 	my $ids;
 	if ($opts->{m}) {
+		$opts->{u} ||= '';
+		$opts->{$_} =~ s/\W//g for qw/m u/;
 		$ids = modified_since(@{$opts}{qw/t m u/});
 	} elsif ($opts->{s}) {
 		$ids = get_by_sql($opts->{s});
