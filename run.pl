@@ -206,7 +206,6 @@ sub run_export {
 			filter => $filter,
 			s3_dbh => DBI->connect('dbi:SQLite:dbname='.$opts->{3},'',''),
 			item => $item,
-			dups => $dups,
 			audit => $audit,
 			output_fh => $fh,
 			candidates => scalar (split ',', $filter) - 1,
