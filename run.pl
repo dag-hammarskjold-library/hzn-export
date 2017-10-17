@@ -135,7 +135,6 @@ sub options {
 		['a' => 'export auths'],
 		['b' => 'export bibs'],
 		['o:' => 'xml output directory'],
-		['d:' => 'data store dir'],
 		['m:' => 'modified since'],
 		['u:' => 'modified until'],
 		['s:' => 'sql criteria'],
@@ -163,17 +162,6 @@ sub options {
 sub MAIN {
 	my $opts = shift;
 	
-	my %dispatch = (
-		#s => \&export_range,
-		m => \&export_from,
-		#c => \&export_by_criteria,
-		#q => \&export_by_criteria,
-		#x => \&thesaurus,
-	);
-
-	#update_dls_data($opts->{d}); # only used to recreate dls 856 fields. use FFT only for now
-	#update_hzn_data($opts->{d}); # data used to find duplicate 035 ctrl#s
-	
 	run_export($opts);
 }
 
@@ -182,8 +170,7 @@ sub run_export {
 	
 	my $ids;
 	if ($opts->{m}) {
-		$opts->{u} ||= '';
-		$opts->{$_} =~ s/\W//g for qw/m u/;
+		$opts->{$_} =~ s/\W//g for grep {defined $opts->{$_}} qw/m u/;
 		$ids = modified_since(@{$opts}{qw/t m u/});
 	} elsif ($opts->{s}) {
 		$ids = get_by_sql($opts->{s});
@@ -203,8 +190,6 @@ sub run_export {
 		say "no export candidates found" and return;
 	}
 	
-	#my $dups = $opts->{t} eq 'bib' ? duplicate_ctrls() : undef; # ($opts->{d}) : undef; # updates hzn ctrl data store
-	my $dups = {};
 	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,0);
 	
 	my $fh = init_xml($opts);
@@ -215,14 +200,11 @@ sub run_export {
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
 		my $audit = audit_data($opts->{t},$filter);
-		#my $dls = dls_data($opts->{d},$filter); # updates dls data store
-		#my $s3 = s3_data($opts->{d},$filter);
 		say "writing xml...";
 		$total += write_xml (
 			type => $opts->{t},
 			filter => $filter,
 			s3_dbh => DBI->connect('dbi:SQLite:dbname='.$opts->{3},'',''),
-			#dls_data => $dls,
 			item => $item,
 			dups => $dups,
 			audit => $audit,
@@ -242,7 +224,7 @@ sub run_export {
 	
 	system qq{echo $outfile | clip};
 	say '> the output file path is in your clipboard';
-	system qq{start https://digitallibrary.un.org/batchuploader/metadata?ln=en};
+	#system qq{start https://digitallibrary.un.org/batchuploader/metadata?ln=en};
 }
 
 sub init_xml {
@@ -281,7 +263,7 @@ sub write_xml {
 			my $record = shift;
 			_000($record);
 			_005($record);
-			_035($record,$p{type},$p{dups});
+			_035($record,$p{type});
 			_998($record,$p{audit}->{$record->id});
 			if ($p{type} eq 'bib') {
 				return unless 
@@ -323,8 +305,6 @@ sub cut_xml {
 }
 
 sub modified_since {
-	#my $opts = shift;
-	#my ($type,$from,$to) = @{$opts}{qw/t m u/};
 	my ($type,$from,$to) = @_;
 	#$opts->{modified_type} ||= 'all';
 	my $mod_type = 'all';
@@ -423,15 +403,12 @@ sub _035 {
 	
 	for my $field ($record->get_fields('035')) {
 		my $ctr = $field->get_sub('a');
-		#next unless $dups->{$ctr} > 0;
 		my $pre = substr $ctr,0,1;
 		my $new = $record->id.'X';
 		$new = $pre.$new if $pre =~ /[A-Z]/;
 		$field->set_sub('a',$new,replace => 1);
 		$field->set_sub('z',$ctr);
 	}
-	
-	#$record->delete_field
 	
 	my $pre = $type eq 'bib' ? '(DHL)' : '(DHLAUTH)';
 	my $nf = MARC::Field->new(tag => '035');
@@ -460,7 +437,6 @@ sub _4xx {
 	for my $tag (qw/400 410 411 430 450 490/) {
 		$_->delete_subfield('0') for $record->get_fields($tag);
 	}
-	#$_->delete_subfield('0') for $record->get_fields(qw/400 410 411 430 450 490/);
 }
 
 sub _650 {
@@ -971,29 +947,6 @@ sub audit_data {
 	return \%data;
 }
 
-sub duplicate_ctrls {
-	
-	say "indexing hzn 035...";
-	my $get = Get::Hzn->new(sql => q|select text from z035|);
-	my %seen;
-	$get->execute (
-		callback => sub {
-			my $row = shift;
-			for ($get->get_sub($row->[0],'a')) {
-				$seen{$_}++;
-			}
-		}
-	);
-	
-	my %return;
-	while (my ($key,$val) = each %seen) {
-		$return{$key}++ if $val > 1;
-	}
-	die "\tfailed\n" unless scalar keys %return;
-	
-	return \%return;
-}
-
 sub _dls_query_str {
 	my $since = shift;
 	$since = date_unix_8601($since);
@@ -1028,29 +981,6 @@ sub range {
 	my $hi = $lo + $inc;
 	my $range = join '-', $lo,$hi;
 	return $range;
-}
-
-sub s3_data {
-	my $range = shift;
-	my $return;
-	my $cmd = qq|aws s3 ls s3://undhl-dgacm/Drop/docs_new/$range/ --recursive|;
-	#say qq|running "$cmd"...|;
-	my $qx = qx|$cmd|;
-	#die "s3 read error $?" unless any {$? == $_} 0, 256;
-	while (none {$? == $_} 0, 256) {
-		state $retry = 1;
-		die "retries failed" if $retry == 5;
-		say "s3 read error. retrying. $?";
-		$qx = qx|$cmd|;
-		$retry++;
-	}
-	for (split "\n", $qx) {
-		my $path = substr $_, 31;
-		my $bib = (split /\//, $path)[3];
-		my $lang = substr $path,-6,2;
-		$return->{$bib}->{$lang} = $path;
-	}
-	return $return;
 }
 
 sub get_by_sql {
