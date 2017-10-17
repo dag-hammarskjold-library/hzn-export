@@ -140,7 +140,8 @@ sub options {
 		['s:' => 'sql criteria'],
 		['S:' => 'sql script'],
 		['3:' => 's3 database'],
-		['e:' => 'error report']
+		['e:' => 'export from error report'],
+		['l:' => 'export from list of bib#s on file']
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -149,12 +150,15 @@ sub options {
 	} else {
 		$opts{a} && $opts{b} && die q{must choose only one of opts "a" or "b"}."\n";
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
-		$opts{m} || $opts{s} || $opts{e} || die q{opt "m" (date) or "s" (sql) required}."\n";
+		$opts{m} || $opts{s} || $opts{S} || $opts{e} || $opts{l} || die q{opt s,S,m,e, or l required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
 		$opts{3} || die q{opt "3" (s3 database path) required}."\n";
-		-e $opts{3} || die qq{s3 database path is invalid}; 
+		#defined $opts{$_} && -e $opts{$_} || die qq{invalid path in opt $_} for qw|3 S l|; 
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
+		for (qw|3 S l|) {
+			 die qq{invalid path in opt $_} if $opts{$_} && ! -e $opts{$_};
+		}
 	}
 	return \%opts;
 }
@@ -175,12 +179,17 @@ sub run_export {
 	} elsif ($opts->{s}) {
 		$ids = get_by_sql($opts->{s});
 	} elsif ($opts->{S}) {
-		$ids = get_by_sql_script($opts->{s});
+		$ids = get_by_sql_script($opts->{S});
 	} elsif ($opts->{e}) {
 		use File::Slurp;
 		my $errors = read_file($opts->{e});
 		my @ids = $errors =~ />\(DHL\)([^<]+)/g;
 		$ids = \@ids;
+	} elsif (my $file = $opts->{l}) {
+		open my $fh,'<',$file;
+		my %ids;
+		chomp and $ids{$_} = 1 while <$fh>;
+		@$ids = keys %ids;
 	}
 	
 	my $c = scalar @$ids;
@@ -243,6 +252,8 @@ sub init_xml {
 		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr);
 	} elsif ($opts->{e}) {
 		$fn = "$dir/".$opts->{e};
+	} elsif ($opts->{l}) {
+		$fn = 'biblist';
 	}
 	$fn .= '.xml';
 	$opts->{outfile} = $fn;
