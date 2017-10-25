@@ -272,6 +272,7 @@ sub write_xml {
 		callback => sub {
 			my $record = shift;
 			_000($record);
+			_001($record);
 			_005($record);
 			_035($record,$p{type});
 			_998($record,$p{audit}->{$record->id});
@@ -387,6 +388,11 @@ sub _000 {
 	$record->get_field('000')->text($l);
 }
 
+sub _001 {
+	my $record = shift;
+	$record->delete_tag('001');
+}
+
 sub _005 {
 	my $record = shift;
 	$record->delete_tag('005');
@@ -423,7 +429,6 @@ sub _035 {
 	my $pre = $type eq 'bib' ? '(DHL)' : '(DHLAUTH)';
 	my $nf = MARC::Field->new(tag => '035');
 	$nf->sub('a',$pre.$record->id);
-	$record->delete_tag('001');
 	$record->add_field($nf);
 }
 
