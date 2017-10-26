@@ -203,7 +203,7 @@ sub run_export {
 	
 	my $fh = init_xml($opts);
 	for my $chunk (0..$chunks) {
-		my $to = $from + 1000;
+		my $to = $from + 999;
 		my $filter = join ',', grep {defined($_)} @$ids[$from..$to];
 		last unless $filter;
 		say 'gathering data for chunk '.($chunk+1).'...';
@@ -217,7 +217,7 @@ sub run_export {
 			item => $item,
 			audit => $audit,
 			output_fh => $fh,
-			candidates => scalar (split ',', $filter) - 1,
+			candidates => scalar (split ',', $filter),
 		);
 		$from += 1000;
 	}
