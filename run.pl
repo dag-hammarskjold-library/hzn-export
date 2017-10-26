@@ -271,7 +271,7 @@ sub write_xml {
 		encoding => 'utf8',
 		callback => sub {
 			my $record = shift;
-			_000($record);
+			_000($record); # creates 980$c = "DELETED" if position 5 = "d"
 			_001($record);
 			_005($record);
 			_035($record,$p{type});
@@ -383,6 +383,9 @@ sub _xrefs {
 
 sub _000 {
 	my $record = shift;
+	if (substr($record->leader,5,1) eq 'd') {
+		$record->add_field(MARC::Field->new(tag => '980')->set_sub('c','DELETED'));
+	}
 	my $l = substr($record->leader,0,24); # chop off end of illegally long leaders in some old records
 	$l =~ s/\x{1E}/|/g; # special case for one record with \x1E in leader (?)
 	$record->get_field('000')->text($l);
@@ -532,7 +535,7 @@ sub _856 {
 	EXTRAS: {
 		# in process
 		last;
-		my $sql = qq|select key from other where bib = $bib|;
+		my $sql = qq|select key from extras where bib = $bib|;
 		my $extras = $s3->selectall_arrayref($sql);
 		for my $key (@$extras) {
 			my $newfn = (split /\//,$key)[-1];
