@@ -99,12 +99,12 @@ use constant LANG_ODS_ISO => {
 
 use constant LANG_ISO_STR => {
 	# unicode normalization form C (NFC)
-	AR => ' العربية ',
-	ZH => '中文 => ',
-	EN => 'English ',
+	AR => 'العربية',
+	ZH => '中文',
+	EN => 'English',
 	FR => 'Français',
-	RU => 'Русский ',
-	ES => 'Español ',
+	RU => 'Русский',
+	ES => 'Español',
 	DE => 'Deutsch',
 };
 
@@ -490,7 +490,7 @@ sub _856 {
 			#my $key = $s3->{$record->id}->{LANG_STR_ISO->{$lang}};
 			
 			my $iso = LANG_STR_ISO->{$lang};
-			my $sql = qq|select key from keys where bib = $bib and lang = "$iso"|;
+			my $sql = qq|select key from docs where bib = $bib and lang = "$iso"|;
 			#say $sql;
 			my $res = $s3->selectrow_arrayref($sql);
 			my $key = $res->[0] if $res;
@@ -533,17 +533,16 @@ sub _856 {
 	}
 	
 	EXTRAS: {
-		# in process
-		last;
 		my $sql = qq|select key from extras where bib = $bib|;
 		my $extras = $s3->selectall_arrayref($sql);
-		for my $key (@$extras) {
+		for my $row (@$extras) {
+			my $key = $row->[0];
 			my $newfn = (split /\//,$key)[-1];
 			my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
 			my @langs;
 			while ($isos) {
 				my $iso = substr $isos,0,2,'';
-				push @langs, LANG_ISO_STR->{$iso};
+				push @langs, LANG_ISO_STR->{$iso} if LANG_ISO_STR->{$iso};
 			}
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
 			$FFT->set_sub('n',clean_fn($newfn));
