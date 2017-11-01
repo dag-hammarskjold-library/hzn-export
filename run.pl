@@ -651,7 +651,7 @@ sub _989 {
 		last unless $r->check('089','b','B15')
 			&& $r->check('089','b','B16')
 			&& ! $r->check('245','*','*letter*from the Secretary-General*');
-		$r->add_field($make->(a => 'docpub', b => 'rd', c => 'sgr'));
+		$r->add_field($make->(a => 'docpub', b => 'rpt', c => 'sgr'));
 	}
 	Q_10: {
 		last unless $r->check('089','b','B04');
