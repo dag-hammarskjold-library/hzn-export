@@ -477,21 +477,19 @@ sub _856 {
 		}
 	}
 	
-	FIELDS: for my $hzn_856 ($record->fields('856')) {
+	FIELDS: for my $hzn_856 ($record->get_fields('856')) {
+		
 		my $url = $hzn_856->get_sub('u');
 		my $lang = $hzn_856->get_sub('3');
+		$record->delete_field($hzn_856);
+		
 		if (index($url,'http://daccess-ods.un.org') > -1) {
-			
-			$record->delete_field($hzn_856);
-			
+		
 			die "could not detect language for file in bib# ".$record->id if (! $lang);	
 					
 			S3:
-			#my $key = $s3->{$record->id}->{LANG_STR_ISO->{$lang}};
-			
 			my $iso = LANG_STR_ISO->{$lang};
 			my $sql = qq|select key from docs where bib = $bib and lang = "$iso"|;
-			#say $sql;
 			my $res = $s3->selectrow_arrayref($sql);
 			my $key = $res->[0] if $res;
 			next unless $key;
@@ -505,6 +503,9 @@ sub _856 {
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
 			$FFT->set_sub('n',$newfn);
 			$FFT->set_sub('d',$lang);
+			for my $check ($record->get_fields('FFT')) {
+				next FIELDS if $check->text eq $FFT->text;
+			}
 			$record->add_field($FFT);
 			
 		} elsif (grep {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
@@ -526,9 +527,12 @@ sub _856 {
 			$FFT->set_sub('d',$lang);
 			#$FFT->set_sub('f',$hzn_856->get_sub('q'));
 			$FFT->set_sub('x',$thumb_url) if $thumb_url;
+			for my $check ($record->get_fields('FFT')) {
+				next FIELDS if $check->text eq $FFT->text;
+			}
 			$record->add_field($FFT);
 		} else {
-			
+			$record->add_field($hzn_856);
 		}
 	}
 	
@@ -547,6 +551,9 @@ sub _856 {
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
 			$FFT->set_sub('n',clean_fn($newfn));
 			$FFT->set_sub('d',join(',',@langs));
+			for my $check ($record->get_fields('FFT')) {
+				next FIELDS if $check->text eq $FFT->text;
+			}
 			$record->add_field($FFT);
 		}
 	}
@@ -655,12 +662,12 @@ sub _989 {
 	}
 	Q_10: {
 		last unless $r->check('089','b','B04');
-		$r->add_field($make->(a => 'docpub', b => 'rd', c => 'asr'));
+		$r->add_field($make->(a => 'docpub', b => 'rpt', c => 'asr'));
 	}
 	Q_11: {
 		last unless $r->check('089','b','B14')
 			&& ! $r->check('089','b','B04');
-		$r->add_field($make->(a => 'docpub', b => 'rd', c => 'per'));
+		$r->add_field($make->(a => 'docpub', b => 'rpt', c => 'per'));
 	}
 	Q_12: {
 		last unless $r->check('089','b','B16')
