@@ -181,14 +181,14 @@ sub run_export {
 	} elsif ($opts->{S}) {
 		$ids = get_by_sql_script($opts->{S});
 	} elsif ($opts->{e}) {
-		use File::Slurp;
+		require File::Slurp;
 		my $errors = read_file($opts->{e});
 		my @ids = $errors =~ />\(DHL\)([^<]+)/g;
 		$ids = \@ids;
 	} elsif (my $file = $opts->{l}) {
 		open my $fh,'<',$file;
 		my %ids;
-		chomp and $ids{$_} = 1 while <$fh>;
+		chomp and $ids{(split /\t/, $_)[0]} = 1 while <$fh>;
 		@$ids = keys %ids;
 	}
 	
@@ -249,13 +249,14 @@ sub init_xml {
 			$fn .= EXPORT_ID;
 		}
 	} elsif ($opts->{s}) {
-		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr);
+		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr =~ s/["<>]//gr);
 	} elsif ($opts->{e}) {
 		$fn = "$dir/".$opts->{e};
 	} elsif ($opts->{l}) {
 		$fn = 'biblist';
 	}
 	$fn .= '.xml';
+	say $fn;
 	$opts->{outfile} = $fn;
 	open my $fh, ">:utf8", $fn; 
 	say {$fh} join "\n", HEADER, '<collection>';
@@ -306,6 +307,9 @@ sub write_xml {
 			say "wrote $count / ".$p{candidates};
 		}
 	);
+	
+
+	
 	
 	return $count;
 }
