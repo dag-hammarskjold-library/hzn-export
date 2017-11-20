@@ -227,7 +227,7 @@ sub run_export {
 	my $outfile = abs_path($opts->{outfile}) =~ s|/|\\|gr;
 	say "> output file: $outfile";
 	
-	open my $log,'>>','log';
+	open my $log,'>>',"$FindBin::Bin/../log.txt";
 	say {$log} join "\t", EXPORT_ID, $outfile;
 	
 	system qq{echo $outfile | clip};
@@ -253,7 +253,7 @@ sub init_xml {
 	} elsif ($opts->{e}) {
 		$fn = "$dir/".$opts->{e};
 	} elsif ($opts->{l}) {
-		$fn = 'biblist';
+		$fn = 'biblist_'.EXPORT_ID;
 	}
 	$fn .= '.xml';
 	say $fn;
