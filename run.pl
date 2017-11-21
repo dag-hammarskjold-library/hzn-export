@@ -292,8 +292,8 @@ sub write_xml {
 				_996($record);
 				_989($record);
 			} elsif ($p{type} eq 'auth') {
-				return if any {$_->xref > $record->id} @{$record->get_fields(qw/400 410 411 450 451/)}
-					|| any {$_ =~ /^[PT]/} $record->get_values('035','a');
+				return if any {$_ =~ /^[PT]/} $record->get_values('035','a')
+					|| any {$_->xref > $record->id} $record->get_fields(qw/400 410 411 450 451/);
 				_150($record); # also handles 450 and 550
 				_4xx($record);
 				_980($record);
@@ -307,9 +307,6 @@ sub write_xml {
 			say "wrote $count / ".$p{candidates};
 		}
 	);
-	
-
-	
 	
 	return $count;
 }
