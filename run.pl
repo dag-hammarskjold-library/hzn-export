@@ -515,16 +515,17 @@ sub _856 {
 			
 			$record->delete_field($hzn_856);
 			my $newfn = (split /\//,$url)[-1];
-			$newfn = clean_fn($newfn);
 			
 			if ($url =~ m|(https?://.*/)(.*)|) {
-				$url = $1.uri_escape($2);
+				if (uri_unescape($2) eq $2) {
+					$url = $1.uri_escape($2);
+				} 
 			} else {
 				die 's3 url error';
 			}
 		
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
-			$FFT->set_sub('n',$newfn);
+			$FFT->set_sub('n',clean_fn($newfn));
 			$FFT->set_sub('d',$lang);
 			#$FFT->set_sub('f',$hzn_856->get_sub('q'));
 			$FFT->set_sub('x',$thumb_url) if $thumb_url;
