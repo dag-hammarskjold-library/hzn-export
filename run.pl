@@ -526,7 +526,9 @@ sub _856 {
 		
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
 			$FFT->set_sub('n',clean_fn($newfn));
+			$lang = 'English' if $lang eq 'Eng';
 			$FFT->set_sub('d',$lang);
+			#$FFT->set_sub('r','   ');
 			#$FFT->set_sub('f',$hzn_856->get_sub('q'));
 			$FFT->set_sub('x',$thumb_url) if $thumb_url;
 			for my $check ($record->get_fields('FFT')) {
