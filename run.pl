@@ -141,7 +141,8 @@ sub options {
 		['S:' => 'sql script'],
 		['3:' => 's3 database'],
 		['e:' => 'export from error report'],
-		['l:' => 'export from list of bib#s on file']
+		['l:' => 'export from list of bib#s on file'],
+		['j' => 'export in json'] 
 	);
 	getopts (join('',map {$_->[0]} @opts), \my %opts);
 	if (! %opts || $opts{h}) {
@@ -201,7 +202,7 @@ sub run_export {
 	
 	my ($stime,$total,$chunks,$from) = (time,0,int(scalar(@$ids / 1000))+1,0);
 	
-	my $fh = init_xml($opts);
+	my $fh = $opts->{j} ? init_json($opts) : init_xml($opts);
 	for my $chunk (0..$chunks) {
 		my $to = $from + 999;
 		my $filter = join ',', grep {defined($_)} @$ids[$from..$to];
@@ -209,19 +210,20 @@ sub run_export {
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
 		my $audit = audit_data($opts->{t},$filter);
-		say "writing xml...";
-		$total += write_xml (
+		say "writing data...";
+		$total += write_data (
 			type => $opts->{t},
 			filter => $filter,
 			s3_dbh => DBI->connect('dbi:SQLite:dbname='.$opts->{3},'',''),
 			item => $item,
 			audit => $audit,
 			output_fh => $fh,
+			format => ($opts->{j} ? 'json' : 'xml'),
 			candidates => scalar (split ',', $filter),
 		);
 		$from += 1000;
 	}
-	cut_xml($fh);
+	$opts->{j} ? cut_json($fh) : cut_xml($fh);
 
 	say "> done. wrote $total records out of $c candidates in ".(time - $stime).' seconds';
 	my $outfile = abs_path($opts->{outfile}) =~ s|/|\\|gr;
@@ -263,7 +265,21 @@ sub init_xml {
 	return $fh;
 }
 
-sub write_xml {
+sub init_json {
+	my $opts = shift;
+	my $fn = EXPORT_ID.'.json';
+	open my $fh,">:utf8",$fn;
+	$opts->{outfile} = $fn;
+	say {$fh} '[';
+	return $fh;
+}
+
+sub cut_json {
+	my $fh = shift;
+	print {$fh} ']';
+}
+
+sub write_data {
 	my %p = @_; #print Dumper \%p;
 	state $range_control = 0;
 	my ($ctype,$count) = (ucfirst $p{type},0);
@@ -302,7 +318,10 @@ sub write_xml {
 			}
 			_xrefs($record);
 			$p{output_fh} //= *STDOUT;
-			print {$p{output_fh}} $record->to_xml;
+			my $method = $p{format} eq 'json' ? 'to_json' : 'to_xml';
+			my $str = $record->$method;
+			$str =~ s/\n$/,\n/ if $p{format} eq 'json';
+			print {$p{output_fh}} $str;
 			$count++;
 			say "wrote $count / ".$p{candidates};
 		}
