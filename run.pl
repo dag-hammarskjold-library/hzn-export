@@ -81,7 +81,8 @@ use constant AUTH_TYPE => {
 };
 
 use constant DESC => {
-	'[cartographic information]' => 'a',
+	#'[cartographic information]' => 'a',
+	#'[cartographic material]' => 'a',
 	'[video recording]' => 'v',
 	'[sound recording]' => 's',
 	'ORAL HISTORY' => 's'
@@ -425,9 +426,7 @@ sub _007 {
 	my $record = shift;
 	for my $field ($record->get_fields(qw/191 245/)) {
 		while (my ($key,$val) = each %{&DESC}) {
-			if ($field->text =~ /\Q$key\E/) {
-				$record->add_field(MARC::Field->new(tag => '007', text => $val));
-			}
+			$record->add_field(MARC::Field->new(tag => '007', text => $val)) if $field->text =~ /\Q$key\E/;
 		}
 	}
 }
@@ -528,9 +527,9 @@ sub _856 {
 			}
 			$record->add_field($FFT);
 			
-		} elsif (grep {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
+		} elsif (any {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
 			
-			next if $hzn_856->check('3',qr/Thumbnail/);
+			next if $hzn_856->check('3',qr/Thumbnail/i);
 			
 			$record->delete_field($hzn_856);
 			my $newfn = (split /\//,$url)[-1];
@@ -543,11 +542,15 @@ sub _856 {
 				die 's3 url error';
 			}
 		
+			my $cleanfn = clean_fn($newfn);
+			my $seen = scalar grep {base($cleanfn) eq $_} map {base($_)} $record->get_values('FFT','n');
+			$cleanfn = base($cleanfn)."_$seen.".ext($cleanfn) if $seen;
+			
 			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a',$url);
-			$FFT->set_sub('n',clean_fn($newfn));
+			$FFT->set_sub('n',$cleanfn);
+			$FFT->set_sub('r','tiff') if $newfn =~ /\.tiff?$/; 
 			$lang = 'English' if $lang eq 'Eng';
 			$FFT->set_sub('d',$lang);
-			#$FFT->set_sub('r','   ');
 			#$FFT->set_sub('f',$hzn_856->get_sub('q'));
 			$FFT->set_sub('x',$thumb_url) if $thumb_url;
 			for my $check ($record->get_fields('FFT')) {
@@ -593,6 +596,18 @@ sub clean_fn {
 	$fn =~ tr/[];/^^&/;
 	$fn .= ".$ext";
 	return $fn;
+}
+
+sub base {
+	my $fn = shift;
+	my @parts = split /\./, $fn;
+	return join '', @parts[0..$#parts-1];
+}
+
+sub ext {
+	my $fn = shift;
+	my @parts = split /\./, $fn;
+	return $parts[-1];
 }
 
 sub _949 {
