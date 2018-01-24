@@ -183,7 +183,7 @@ sub run_export {
 	} elsif ($opts->{S}) {
 		$ids = get_by_sql_script($opts->{S});
 	} elsif ($opts->{e}) {
-		require File::Slurp;
+		use File::Slurp;
 		my $errors = read_file($opts->{e});
 		my @ids = $errors =~ />\(DHL\)([^<]+)/g;
 		$ids = \@ids;
@@ -242,7 +242,7 @@ sub init_xml {
 	my $opts = shift;
 	$opts->{o} ||= "$FindBin::Bin/../XML";
 	my $dir = $opts->{o};
-	(-e $dir || mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
+	(-e $dir or mkdir $dir) or die qq|can't make dir "$opts->{o}"|;
 	my $fn;
 	if ($opts->{m}) {
 		$fn = "$dir/$opts->{t}\_from_$opts->{m}\-";
@@ -254,7 +254,8 @@ sub init_xml {
 	} elsif ($opts->{s}) {
 		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr =~ s/["<>]//gr);
 	} elsif ($opts->{e}) {
-		$fn = "$dir/".$opts->{e};
+		$fn = "$dir/".(split /\\|\//, $opts->{e})[-1];
+		say $fn;
 	} elsif ($opts->{l}) {
 		$fn = 'biblist_'.EXPORT_ID;
 	}
@@ -502,31 +503,8 @@ sub _856 {
 		my $lang = $hzn_856->get_sub('3');
 		$record->delete_field($hzn_856);
 		
-		if (index($url,'http://daccess-ods.un.org') > -1) {
-		
-			die "could not detect language for file in bib# ".$record->id if (! $lang);	
-					
-			S3:
-			my $iso = LANG_STR_ISO->{$lang};
-			my $sql = qq|select key from docs where bib = $bib and lang = "$iso"|;
-			my $res = $s3->selectrow_arrayref($sql);
-			my $key = $res->[0] if $res;
-			next unless $key;
-			
-			my $newfn = (split /\//,$key)[-1];
-			$newfn = clean_fn($newfn);
-			if (! grep {$_ eq substr($newfn,-6,2)} keys %{&LANG_ISO_STR}) {
-				substr($newfn,-7,2) = '-'.$iso;
-			}
-			
-			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
-			$FFT->set_sub('n',$newfn);
-			$FFT->set_sub('d',$lang);
-			for my $check ($record->get_fields('FFT')) {
-				next FIELDS if $check->text eq $FFT->text;
-			}
-			$record->add_field($FFT);
-			
+		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
+			# pass
 		} elsif (any {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
 			
 			next if $hzn_856->check('3',qr/Thumbnail/i);
@@ -562,10 +540,10 @@ sub _856 {
 		}
 	}
 	
-	EXTRAS: {
-		my $sql = qq|select key from extras where bib = $bib|;
-		my $extras = $s3->selectall_arrayref($sql);
-		for my $row (@$extras) {
+	DOCS: for my $tbl (qw|docs extras|) {
+		my $sql = qq|select key from $tbl where bib = $bib|;
+		my $keys = $s3->selectall_arrayref($sql);
+		for my $row (@$keys) {
 			my $key = $row->[0];
 			my $newfn = (split /\//,$key)[-1];
 			my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
