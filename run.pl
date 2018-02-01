@@ -505,11 +505,12 @@ sub _856 {
 		
 		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
 			# pass
-		} elsif (any {$url =~ /$_/} qw|s3.amazonaws dag.un.org|) {
-			
-			next if $hzn_856->check('3',qr/Thumbnail/i);
+		} elsif (any {$url =~ /$_/} qw|undls-js.s3.amazonaws un-maps.s3.amazonaws dag.un.org|) {
 			
 			$record->delete_field($hzn_856);
+			
+			next if $hzn_856->check('3',qr/Thumbnail/i);
+			chop $url while substr $url,-1 eq ' ';
 			my $newfn = (split /\//,$url)[-1];
 			
 			if ($url =~ m|(https?://.*/)(.*)|) {
