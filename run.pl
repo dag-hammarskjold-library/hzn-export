@@ -510,7 +510,7 @@ sub _856 {
 			$record->delete_field($hzn_856);
 			
 			next if $hzn_856->check('3',qr/Thumbnail/i);
-			chop $url while substr $url,-1 eq ' ';
+			chop $url while substr($url,-1,1) eq ' ';
 			my $newfn = (split /\//,$url)[-1];
 			
 			if ($url =~ m|(https?://.*/)(.*)|) {
@@ -518,7 +518,9 @@ sub _856 {
 					$url = $1.uri_escape($2);
 				} 
 			} else {
-				die 's3 url error';
+				print Dumper $hzn_856;
+				say $record->id;
+				die "s3 url error: $url";
 			}
 		
 			my $cleanfn = clean_fn($newfn);
