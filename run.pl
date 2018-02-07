@@ -38,6 +38,13 @@ use constant HEADER => <<'#';
 # <collection xmlns="http://www.loc.gov/MARC21/slim">
 # Tind doesn't like the xmlns attribute
 
+use constant HARVEST => [
+	'digitization.s3.amazonaws', 
+	'undls-js.s3.amazonaws',
+	'un-maps.s3.amazonaws', 
+	'dag.un.org'
+];
+
 use constant TYPE => {
 	map => 'Maps',
 	sp => 'Speeches',
@@ -505,7 +512,7 @@ sub _856 {
 		
 		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
 			# pass
-		} elsif (any {$url =~ /$_/} qw|undls-js.s3.amazonaws un-maps.s3.amazonaws dag.un.org|) {
+		} elsif (any {$url =~ /$_/} @{&HARVEST}) {
 			
 			$record->delete_field($hzn_856);
 			
