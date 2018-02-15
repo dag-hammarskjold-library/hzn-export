@@ -520,7 +520,7 @@ sub _856 {
 			chop $url while substr($url,-1,1) eq ' ';
 			my $newfn = (split /\//,$url)[-1];
 			
-			if ($url =~ m|(https?://.*?/)(.*)|) {
+			if ($url =~ m|(https?://.*/)(.*)|) { 
 				if (uri_unescape($2) eq $2) {
 					$url = $1.uri_escape($2);
 				} 
