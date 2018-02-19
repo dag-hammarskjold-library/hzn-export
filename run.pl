@@ -9,7 +9,7 @@ package main;
 use Data::Dumper;
 $Data::Dumper::Indent = 1;
 use Getopt::Std;
-use List::Util qw|pairs any all none min max|;
+use List::Util qw|pairs first any all none min max|;
 use URI::Escape;
 use Carp;
 use Cwd qw/abs_path/;
@@ -508,21 +508,47 @@ sub _856 {
 		
 		my $url = $hzn_856->get_sub('u');
 		my $lang = $hzn_856->get_sub('3');
-		$record->delete_field($hzn_856);
 		
 		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
-			# pass
+			
+			$record->delete_field($hzn_856);
+			
+			my $get_key = sub {
+				my $tbl = shift;
+				my $lang2 = LANG_STR_ISO->{$lang};
+				return first {defined} $s3->selectrow_array(qq|select key from $tbl where bib = $bib and lang = "$lang2"|);
+			};
+			
+			if (my $key = first {defined} map {$get_key->($_)} qw|extras docs|) {
+				
+				my $newfn = (split /\//,$key)[-1];
+				my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
+				my @langs;
+				while ($isos) {
+					my $iso = substr $isos,0,2,'';
+					push @langs, LANG_ISO_STR->{$iso} if LANG_ISO_STR->{$iso};
+				}
+				my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
+				$FFT->set_sub('n',clean_fn($newfn));
+				$FFT->set_sub('d',join(',',@langs));
+				for my $check ($record->get_fields('FFT')) {
+					next FIELDS if $check->sub('d') eq $FFT->sub('d');
+				}
+				$record->add_field($FFT);
+			}
+			
 		} elsif (any {$url =~ /$_/} @{&HARVEST}) {
 			
 			$record->delete_field($hzn_856);
 			
-			next if $hzn_856->check('3',qr/Thumbnail/i);
+			next if $hzn_856->check('3',qr/Thumbnail/i); 
 			chop $url while substr($url,-1,1) eq ' ';
 			my $newfn = (split /\//,$url)[-1];
 			
 			if ($url =~ m|(https?://.*?/)(.*)|) {
 				if (uri_unescape($2) eq $2) {
 					$url = $1.uri_escape($2);
+					$url =~ s/%2F/\//g;
 				} 
 			} else {
 				print Dumper $hzn_856;
@@ -549,29 +575,6 @@ sub _856 {
 			$record->add_field($hzn_856);
 		}
 	}
-	
-	DOCS: for my $tbl (qw|docs extras|) {
-		my $sql = qq|select key from $tbl where bib = $bib|;
-		my $keys = $s3->selectall_arrayref($sql);
-		for my $row (@$keys) {
-			my $key = $row->[0];
-			my $newfn = (split /\//,$key)[-1];
-			my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
-			my @langs;
-			while ($isos) {
-				my $iso = substr $isos,0,2,'';
-				push @langs, LANG_ISO_STR->{$iso} if LANG_ISO_STR->{$iso};
-			}
-			my $FFT = MARC::Field->new(tag => 'FFT')->set_sub('a','http://undhl-dgacm.s3.amazonaws.com/'.uri_escape($key));
-			$FFT->set_sub('n',clean_fn($newfn));
-			$FFT->set_sub('d',join(',',@langs));
-			for my $check ($record->get_fields('FFT')) {
-				next FIELDS if $check->text eq $FFT->text;
-			}
-			$record->add_field($FFT);
-		}
-	}
-	
 }
 
 sub clean_fn {
