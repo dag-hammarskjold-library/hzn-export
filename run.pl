@@ -40,7 +40,7 @@ use constant HEADER => <<'#';
 
 use constant HARVEST => [
 	'digitization.s3.amazonaws', 
-	'undls-js.s3.amazonaws',
+	'undl-js.s3.amazonaws',
 	'un-maps.s3.amazonaws', 
 	'dag.un.org'
 ];
@@ -572,7 +572,9 @@ sub _856 {
 			}
 			$record->add_field($FFT);
 		} else {
-			$record->add_field($hzn_856);
+			
+			#$record->add_field($hzn_856);
+		
 		}
 	}
 }
