@@ -301,6 +301,7 @@ sub write_data {
 			_001($record);
 			_005($record);
 			_035($record,$p{type});
+			_980($record,$p{type});
 			_998($record,$p{audit}->{$record->id});
 			if ($p{type} eq 'bib') {
 				return unless 
@@ -321,7 +322,6 @@ sub write_data {
 					|| (any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
 				_150($record); # also handles 450 and 550
 				_4xx($record);
-				_980($record);
 			} else {
 				die 'wtf';
 			}
@@ -624,13 +624,17 @@ sub _967 {
 }
 
 sub _980 {
-	my $record = shift;
-	$record->add_field(MARC::Field->new(tag => '980')->set_sub('a','AUTHORITY'));
-	for (keys %{&AUTH_TYPE}) {
-		if ($record->has_tag($_)) {
-			$record->add_field(MARC::Field->new(tag => '980')->set_sub('a',AUTH_TYPE->{$_}));
-			last;
+	my ($record,$type) = @_;
+	if ($type eq 'auth') {
+		$record->add_field(MARC::Field->new(tag => '980')->set_sub('a','AUTHORITY'));
+		for (keys %{&AUTH_TYPE}) {
+			if ($record->has_tag($_)) {
+				$record->add_field(MARC::Field->new(tag => '980')->set_sub('a',AUTH_TYPE->{$_}));
+				last;
+			}
 		}
+	} else {
+		$record->add_field(MARC::Field->new(tag => '980')->set_sub('a','BIB'));
 	}
 }
 
