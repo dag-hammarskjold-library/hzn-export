@@ -259,7 +259,8 @@ sub init_xml {
 			$fn .= EXPORT_ID;
 		}
 	} elsif ($opts->{s}) {
-		$fn = "$dir/".($opts->{s} =~ s/\s/_/gr =~ s/["<>]//gr);
+		#$fn = "$dir/".($opts->{s} =~ s/\s/_/gr =~ s/["<>]//gr);
+		$fn = 'biblist_'.EXPORT_ID;
 	} elsif ($opts->{e}) {
 		$fn = "$dir/".(split /\\|\//, $opts->{e})[-1];
 		say $fn;
@@ -318,7 +319,8 @@ sub write_data {
 				_996($record);
 				_989($record);
 			} elsif ($p{type} eq 'auth') {
-				return if (any {$_ =~ /^[PT]/} $record->get_values('035','a'))
+				return if $record->has_tag('150')
+					|| (any {$_ =~ /^[PT]/} $record->get_values('035','a'))
 					|| (any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
 				_150($record); # also handles 450 and 550
 				_4xx($record);
@@ -504,23 +506,11 @@ sub _856 {
 		}
 	}
 	
-	FIELDS: for my $hzn_856 ($record->get_fields('856')) {
-		
-		my $url = $hzn_856->get_sub('u');
-		my $lang = $hzn_856->get_sub('3');
-		
-		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
-			
-			$record->delete_field($hzn_856);
-			
-			my $get_key = sub {
-				my $tbl = shift;
-				my $lang2 = LANG_STR_ISO->{$lang};
-				return first {defined} $s3->selectrow_array(qq|select key from $tbl where bib = $bib and lang = "$lang2"|);
-			};
-			
-			if (my $key = first {defined} map {$get_key->($_)} qw|extras docs|) {
-				
+	S3: {
+		for my $ref (map {$s3->selectall_arrayref("select lang, key from $_ where bib = $bib")} qw|docs extras|) {
+			FILES: for (@$ref) {
+				my ($lang,$key) = @$_;
+				$lang = LANG_ISO_STR->{$lang};
 				my $newfn = (split /\//,$key)[-1];
 				my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
 				my @langs;
@@ -532,10 +522,21 @@ sub _856 {
 				$FFT->set_sub('n',clean_fn($newfn));
 				$FFT->set_sub('d',join(',',@langs));
 				for my $check ($record->get_fields('FFT')) {
-					next FIELDS if $check->sub('d') eq $FFT->sub('d');
+					next FILES if $check->sub('d') eq $FFT->sub('d');
 				}
 				$record->add_field($FFT);
 			}
+		}
+	}
+	
+	FIELDS: for my $hzn_856 ($record->get_fields('856')) {
+		
+		my $url = $hzn_856->get_sub('u');
+		my $lang = $hzn_856->get_sub('3');
+		
+		if (any {$url =~ /$_/} qw|daccess-ods.un.org dds.ny.un.org|) {
+			
+			$record->delete_field($hzn_856);
 			
 		} elsif (any {$url =~ /$_/} @{&HARVEST}) {
 			
@@ -979,23 +980,21 @@ sub item_data {
 
 sub audit_data {
 	my ($type,$filter) = @_;
+	
+	my @selects = $type.'#';
+	push @selects, qw{
+		create_date
+		create_time
+		create_user
+		change_date
+		change_time
+		change_user
+	};
+	push @selects, 'system_created_flag' if $type eq 'auth';
+	my $sql = 'select '.join(',',@selects)." from $type\_control where $type\# in ($filter)";
+	
 	my %data;
-	my $get = Get::Hzn->new (
-		sql => qq {
-			select 
-				$type\#,
-				create_date,
-				create_time,
-				create_user,
-				change_date,
-				change_time,
-				change_user 
-			from 
-				$type\_control
-			where 
-				$type\# in ($filter)
-		}
-	);
+	my $get = Get::Hzn->new(sql => $sql);
 	$get->execute (
 		callback => sub {
 			my $row = shift;
@@ -1003,6 +1002,7 @@ sub audit_data {
 			$data{$id} = $row;
 		}
 	);
+	
 	return \%data;
 }
 
