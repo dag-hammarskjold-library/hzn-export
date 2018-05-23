@@ -117,7 +117,7 @@ use constant LANG_ISO_STR => {
 };
 
 use constant LANG_STR_ISO => {
-	# NFC
+	# decomposed?
 	العربية => 'AR',
 	中文 => 'ZH',
 	Eng => 'EN',
@@ -127,6 +127,15 @@ use constant LANG_STR_ISO => {
 	Español => 'ES',
 	Deutsch => 'DE',
 	Other => 'DE',
+	
+	# composed?
+	العربية => 'AR',
+	中文 => 'ZH',
+	English => 'EN',
+	Français => 'FR',
+	Русский => 'RU',
+	Español => 'ES',
+	Other => 'DE'
 	
 	# alt encoding normalization form? not sure how to convert
 	Français => 'FR',
@@ -161,7 +170,7 @@ sub options {
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
 		$opts{m} || $opts{s} || $opts{S} || $opts{e} || $opts{l} || die q{opt s,S,m,e, or l required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
-		$opts{3} || die q{opt "3" (s3 database path) required}."\n";
+		$opts{3} // die q{opt "3" (s3 database path) required}."\n";
 		#defined $opts{$_} && -e $opts{$_} || die qq{invalid path in opt $_} for qw|3 S l|; 
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
@@ -222,7 +231,7 @@ sub run_export {
 		$total += write_data (
 			type => $opts->{t},
 			filter => $filter,
-			s3_dbh => DBI->connect('dbi:SQLite:dbname='.$opts->{3},'',''),
+			s3_dbh => ($opts->{3} ? DBI->connect('dbi:SQLite:dbname='.$opts->{3},'','') : undef),
 			item => $item,
 			audit => $audit,
 			output_fh => $fh,
@@ -319,9 +328,11 @@ sub write_data {
 				_996($record);
 				_989($record);
 			} elsif ($p{type} eq 'auth') {
-				return if $record->has_tag('150')
-					|| (any {$_ =~ /^[PT]/} $record->get_values('035','a'))
-					|| (any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
+				return if #$record->has_tag('150') || 
+					#$all {$_->tag =~ /^(000|001|005|008|040|1|4[^9])/} $record->fields;
+					#say join "\t", map {$_->tag} $record->fields;
+					#|| (any {$_ =~ /^[PT]/} $record->get_values('035','a'))
+					(any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
 				_150($record); # also handles 450 and 550
 				_4xx($record);
 			} else {
@@ -447,7 +458,7 @@ sub _020 {
 }
 
 sub _035 {
-	my ($record,$type,$dups) = @_;
+	my ($record,$type) = @_;
 	
 	for my $field ($record->get_fields('035')) {
 		my $ctr = $field->get_sub('a');
@@ -786,6 +797,8 @@ sub _989 {
 		last unless ! $r->has_tag('989');
 		$r->add_field($make->(a => 'docpub'));
 	}
+	
+	die "no criteria met to make 989 in bib# ".$r->id unless $r->has_tag('989');
 }
 
 sub _993 {
