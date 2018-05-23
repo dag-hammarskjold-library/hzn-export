@@ -317,7 +317,8 @@ sub write_data {
 				return unless 
 					$record->has_tag('191') 
 					|| $record->has_tag('791') 
-					|| (any {$_ eq 'DHU'} $record->get_values('099','b'));
+					|| (any {$_ eq 'DHU'} $record->get_values('099','b'))
+					|| $record->get_value('245','a') =~ /Work in Progress/i;
 				_007($record);
 				_020($record);
 				_650($record);
