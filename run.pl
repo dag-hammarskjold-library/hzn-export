@@ -110,9 +110,9 @@ use constant LANG_ISO_STR => {
 	AR => 'العربية',
 	ZH => '中文',
 	EN => 'English',
-	FR => 'Français',
+	FR => 'Français',
 	RU => 'Русский',
-	ES => 'Español',
+	ES => 'Español',
 	DE => 'Deutsch',
 };
 
@@ -135,7 +135,7 @@ use constant LANG_STR_ISO => {
 	Français => 'FR',
 	Русский => 'RU',
 	Español => 'ES',
-	Other => 'DE'
+	Other => 'DE',
 	
 	# alt encoding normalization form? not sure how to convert
 	Français => 'FR',
