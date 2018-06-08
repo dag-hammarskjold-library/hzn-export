@@ -170,7 +170,7 @@ sub options {
 		$opts{a} || $opts{b} || die q{boolean opt "a" or "b" required}."\n";
 		$opts{m} || $opts{s} || $opts{S} || $opts{e} || $opts{l} || die q{opt s,S,m,e, or l required}."\n";
 		$opts{m} && length $opts{m} < 8 && die qq{datetime opts "m" must be at least 8 characters"};
-		$opts{3} // die q{opt "3" (s3 database path) required}."\n";
+		$opts{b} && ! $opts{3} && die q{opt "3" (s3 database path) required to export bibs}."\n";
 		#defined $opts{$_} && -e $opts{$_} || die qq{invalid path in opt $_} for qw|3 S l|; 
 		$opts{a} && ($opts{t} = 'auth');
 		$opts{b} && ($opts{t} = 'bib');
@@ -227,6 +227,7 @@ sub run_export {
 		say 'gathering data for chunk '.($chunk+1).'...';
 		my $item = item_data($filter);
 		my $audit = audit_data($opts->{t},$filter);
+		my $invalids = invalid_auths($filter) if $opts->{t} eq 'auth';
 		say "writing data...";
 		$total += write_data (
 			type => $opts->{t},
@@ -237,6 +238,7 @@ sub run_export {
 			output_fh => $fh,
 			format => ($opts->{j} ? 'json' : 'xml'),
 			candidates => scalar (split ',', $filter),
+			invalids => $invalids
 		);
 		$from += 1000;
 	}
@@ -307,18 +309,18 @@ sub write_data {
 		encoding => 'utf8',
 		callback => sub {
 			my $record = shift;
-			_000($record); # creates 980$c = "DELETED" if position 5 = "d"
+			_000($record); 
 			_001($record);
 			_005($record);
 			_035($record,$p{type});
-			_980($record,$p{type});
+			_980($record,$p{type},$p{invalids}); # creates 980$c = "DELETED" if leader position 5 = "d" or invalid auth
 			_998($record,$p{audit}->{$record->id});
 			if ($p{type} eq 'bib') {
+				return if $record->get_value('245','a') =~ /Work in Progress/i;
 				return unless 
 					$record->has_tag('191') 
 					|| $record->has_tag('791') 
-					|| (any {$_ eq 'DHU'} $record->get_values('099','b'))
-					|| $record->get_value('245','a') =~ /Work in Progress/i;
+					|| (any {$_ eq 'DHU'} $record->get_values('099','b'));
 				_007($record);
 				_020($record);
 				_650($record);
@@ -329,11 +331,13 @@ sub write_data {
 				_996($record);
 				_989($record);
 			} elsif ($p{type} eq 'auth') {
-				return if #$record->has_tag('150') || 
+				return if 
+					($p{invalids}->{$record->id} && ! $record->has_tag('491'))
+					or (any {$_ =~ /^[PT]/} $record->get_values('035','a'));
+					#$record->has_tag('150') || 
 					#$all {$_->tag =~ /^(000|001|005|008|040|1|4[^9])/} $record->fields;
 					#say join "\t", map {$_->tag} $record->fields;
-					#|| (any {$_ =~ /^[PT]/} $record->get_values('035','a'))
-					(any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
+					#(any {$_->xref < $record->id} $record->get_fields(qw/400 410 411 430 450 451/));
 				_150($record); # also handles 450 and 550
 				_4xx($record);
 			} else {
@@ -426,9 +430,6 @@ sub _xrefs {
 
 sub _000 {
 	my $record = shift;
-	if (substr($record->leader,5,1) eq 'd') {
-		$record->add_field(MARC::Field->new(tag => '980')->set_sub('c','DELETED'));
-	}
 	my $l = substr($record->leader,0,24); # chop off end of illegally long leaders in some old records
 	$l =~ s/\x{1E}/|/g; # special case for one record with \x1E in leader (?)
 	$record->get_field('000')->text($l);
@@ -522,6 +523,7 @@ sub _856 {
 		for my $ref (map {$s3->selectall_arrayref("select lang, key from $_ where bib = $bib")} qw|docs extras|) {
 			FILES: for (@$ref) {
 				my ($lang,$key) = @$_;
+				say $key;
 				$lang = LANG_ISO_STR->{$lang};
 				my $newfn = (split /\//,$key)[-1];
 				my $isos = $1 if $newfn =~ /-([A-Z]+)\.\w+/;
@@ -638,6 +640,7 @@ sub _967 {
 
 sub _980 {
 	my ($record,$type) = @_;
+	
 	if ($type eq 'auth') {
 		$record->add_field(MARC::Field->new(tag => '980')->set_sub('a','AUTHORITY'));
 		for (keys %{&AUTH_TYPE}) {
@@ -648,6 +651,10 @@ sub _980 {
 		}
 	} else {
 		$record->add_field(MARC::Field->new(tag => '980')->set_sub('a','BIB'));
+	}
+	
+	if (substr($record->leader,5,1) eq 'd') {
+		$record->add_field(MARC::Field->new(tag => '980')->set_sub('c','DELETED'));
 	}
 }
 
@@ -1016,6 +1023,24 @@ sub audit_data {
 			$data{$id} = $row;
 		}
 	);
+	
+	return \%data;
+}
+
+sub invalid_auths {
+	my $filter = shift;
+	
+	my %data;
+	for my $sql (map {"select auth# from $_ where see_flag = 1 and auth# in ($filter)"} qw<author subject>) {
+		my $get = Get::Hzn->new(sql => $sql);
+		$get->execute (
+			callback => sub {
+				my $row = shift;
+				my $xref = shift @$row;
+				$data{$xref} ||= 1;
+			}
+		);
+	}
 	
 	return \%data;
 }
